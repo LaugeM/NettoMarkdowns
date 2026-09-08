@@ -1,0 +1,282 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Markdowns";
+}
+
+<div class="page-head">
+    <div>
+        <h1>Netto markdowns</h1>
+        <p class="lede">Everything currently reduced for short shelf life in your stores.</p>
+    </div>
+    @if (Model.FetchedAt != default)
+    {
+        <form method="get" class="refresh-form">
+            @* Carry the current filters through so Refresh doesn't reset the view. *@
+            <input type="hidden" name="Zips" value="@Model.Zips" />
+            <input type="hidden" name="q" value="@Model.Query" />
+            <input type="hidden" name="MinDiscount" value="@Model.MinDiscount" />
+            <input type="hidden" name="MaxPrice" value="@Model.MaxPrice" />
+            <input type="hidden" name="Sort" value="@Model.Sort" />
+            <input type="hidden" name="Flat" value="@Model.Flat.ToString().ToLowerInvariant()" />
+            @foreach (var storeId in Model.SelectedStoreIds)
+            {
+                <input type="hidden" name="StoreIds" value="@storeId" />
+            }
+            @foreach (var category in Model.SelectedCategories)
+            {
+                <input type="hidden" name="Categories" value="@category" />
+            }
+            <input type="hidden" name="StoresSubmitted" value="true" />
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Refresh</button>
+            <div class="fetched">Updated @Model.FetchedAt.ToString("HH:mm:ss")</div>
+            <div class="quota" data-quota>@Model.LookupsUsed / @Model.LookupsLimit lookups used today</div>
+        </form>
+    }
+</div>
+
+@if (Model.NeedsApiKey)
+{
+    <div class="setup-card">
+        <h2>One-time setup</h2>
+        <p>
+            This app reads Salling Group's public Food Waste API, which needs a free API key.
+        </p>
+        <ol>
+            <li>Create an app at <a href="https://developer.sallinggroup.com" target="_blank" rel="noreferrer">developer.sallinggroup.com</a> and enable the <strong>Food Waste</strong> API.</li>
+            <li>From the project folder, run:
+                <pre><code>dotnet user-secrets set "Salling:ApiKey" "&lt;your key&gt;"</code></pre>
+            </li>
+            <li>Restart the app.</li>
+        </ol>
+        <p class="hint">
+            User secrets keep the key out of <code>appsettings.json</code>, so it never ends up in git.
+        </p>
+    </div>
+}
+else
+{
+    <form method="get" class="controls">
+      <div class="filters">
+        <div class="filter">
+            <label asp-for="Zips">Postcodes</label>
+            <input asp-for="Zips" value="@Model.EffectiveZips" placeholder="2100, 2200" class="form-control" />
+            <div class="hint">Comma-separated — one lookup per postcode.</div>
+        </div>
+        <div class="filter">
+            <label asp-for="Query">Search</label>
+            <input asp-for="Query" placeholder="kylling, mælk…" class="form-control" />
+        </div>
+        <div class="filter narrow">
+            <label asp-for="MinDiscount">Min. discount</label>
+            <div class="input-group">
+                <input asp-for="MinDiscount" type="number" min="0" max="99" step="5" class="form-control" />
+                <span class="input-group-text">%</span>
+            </div>
+        </div>
+        <div class="filter narrow">
+            <label asp-for="MaxPrice">Max. price</label>
+            <div class="input-group">
+                <input asp-for="MaxPrice" type="number" min="0" step="5" placeholder="any" class="form-control" />
+                <span class="input-group-text">kr.</span>
+            </div>
+        </div>
+        <div class="filter narrow">
+            <label asp-for="Sort">Sort by</label>
+            <select asp-for="Sort" class="form-select">
+                <option value="percent">Biggest % off</option>
+                <option value="saving">Biggest saving</option>
+                <option value="price">Lowest price</option>
+                <option value="expiry">Last sale date first</option>
+                <option value="stock">Most in stock</option>
+                <option value="name">Name</option>
+            </select>
+        </div>
+        <div class="filter check">
+            <label class="form-check-label">
+                <input asp-for="Flat" class="form-check-input" />
+                One combined list
+            </label>
+        </div>
+      </div>
+
+@if (Model.AvailableStores.Count > 0)
+{
+      <div class="store-picker">
+        @* Tells the page model that an empty StoreIds means "cleared", not "unspecified". *@
+        <input type="hidden" name="StoresSubmitted" value="true" />
+        <div class="picker-head">
+            <span class="picker-label">Stores</span>
+            <span class="hint">
+                @if (Model.IsStoreFiltered)
+                {
+                    <text>Showing @Model.SelectedStoreCount of @Model.AvailableStores.Count — your choice is remembered.</text>
+                }
+                else
+                {
+                    <text>Tick the ones you actually shop at; leave all clear for every store.</text>
+                }
+            </span>
+        </div>
+        <div class="store-chips">
+            @foreach (var store in Model.AvailableStores)
+            {
+                var inputId = $"store-{store.Id}";
+                <label class="store-chip @(store.Selected ? "on" : "")" for="@inputId">
+                    <input type="checkbox" id="@inputId" name="StoreIds"
+                           value="@store.Id" checked="@store.Selected" />
+                    <span class="chip-body">
+                        <span class="chip-name">@store.Name</span>
+                        <span class="chip-meta">
+                            @store.Address
+                            <span class="dot">&middot;</span>@store.ItemCount marked down
+                        </span>
+                    </span>
+                </label>
+            }
+        </div>
+      </div>
+}
+
+@if (Model.AvailableCategoryGroups.Count > 0)
+{
+      <div class="store-picker">
+        <div class="picker-head">
+            <span class="picker-label">Categories</span>
+            <span class="hint">
+                @if (Model.IsCategoryFiltered)
+                {
+                    <text>@Model.SelectedCategoryCount of @Model.AvailableCategories.Count selected.</text>
+                }
+                else
+                {
+                    <text>Tick a group to take all of it, or open it to pick single categories.</text>
+                }
+            </span>
+        </div>
+        <div class="cat-tree">
+            @foreach (var group in Model.AvailableCategoryGroups)
+            {
+                if (group.IsLeafOnly)
+                {
+                    @* A group with one category is just that category. *@
+                    var only = group.Children[0];
+                    <label class="cat-row cat-single @(only.Selected ? "on" : "")">
+                        <input type="checkbox" name="Categories" value="@only.Value"
+                               checked="@only.Selected" />
+                        <span class="cat-name">@group.LeafOnlyLabel</span>
+                        <span class="chip-count">@only.Count</span>
+                    </label>
+                }
+                else
+                {
+                    <details class="cat-group" open="@group.AnySelected">
+                        <summary class="cat-row">
+                            @* Group box is UI only — it has no name, so nothing extra is
+                               posted; site.js just ticks the children underneath it. *@
+                            <input type="checkbox" class="cat-parent" checked="@group.AllSelected" />
+                            <span class="cat-name">@group.Name</span>
+                            <span class="chip-count">@group.Count</span>
+                        </summary>
+                        <div class="cat-children">
+                            @foreach (var category in group.Children)
+                            {
+                                <label class="cat-row cat-child @(category.Selected ? "on" : "")">
+                                    <input type="checkbox" name="Categories" value="@category.Value"
+                                           checked="@category.Selected" />
+                                    <span class="cat-name">@category.Label</span>
+                                    <span class="chip-count">@category.Count</span>
+                                </label>
+                            }
+                        </div>
+                    </details>
+                }
+            }
+        </div>
+      </div>
+}
+
+      <div class="controls-actions">
+        <button type="submit" class="btn btn-dark">Show</button>
+      </div>
+    </form>
+
+    @if (Model.Error is { } error)
+    {
+        <div class="alert alert-danger" role="alert">@error</div>
+    }
+    else if (Model.ItemCount == 0)
+    {
+        <div class="empty">
+            <p>No markdowns match right now.</p>
+            <p class="hint">
+                Stores usually reduce in the morning and again before closing, so an empty list
+                early in the day is normal. Try loosening the filters or adding another postcode.
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value">@Model.ItemCount</div>
+                <div class="stat-label">items</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">@Model.StoreCount</div>
+                <div class="stat-label">@(Model.StoreCount == 1 ? "store" : "stores")</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">@Model.BestDiscount.ToString("0")%</div>
+                <div class="stat-label">best discount</div>
+            </div>
+        </div>
+
+        @if (Model.Flat)
+        {
+            <section class="store-card">
+                <table class="table items">
+                    <partial name="_ItemsHead" />
+                    <tbody>
+                    @foreach (var item in Model.AllItems)
+                    {
+                        <partial name="_ItemRow" model="item" view-data='new ViewDataDictionary(ViewData) { ["ShowStore"] = true }' />
+                    }
+                    </tbody>
+                </table>
+            </section>
+        }
+        else
+        {
+            @foreach (var group in Model.Groups)
+            {
+                <section class="store-card">
+                    <header class="store-head">
+                        <div>
+                            <h2>@group.Store.DisplayName</h2>
+                            <div class="store-meta">
+                                @group.Store.Address?.ToString()
+                                @if (group.Store.ClosesToday is { } closes)
+                                {
+                                    <span class="dot">·</span><span>closes @closes</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="store-count">
+                            @group.Items.Count @(group.Items.Count == 1 ? "item" : "items") · up to @group.BestDiscount.ToString("0")% off
+                        </div>
+                    </header>
+                    <table class="table items">
+                        <partial name="_ItemsHead" />
+                        <tbody>
+                        @foreach (var item in group.Items)
+                        {
+                            <partial name="_ItemRow" model="item" />
+                        }
+                        </tbody>
+                    </table>
+                </section>
+            }
+        }
+    }
+}

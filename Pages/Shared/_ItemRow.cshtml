@@ -1,0 +1,60 @@
+@model NettoMarkdowns.Pages.IndexModel.MarkdownItem
+@{
+    var showStore = ViewData["ShowStore"] as bool? ?? false;
+}
+<tr>
+    <td class="thumb-cell">
+        @if (!string.IsNullOrWhiteSpace(Model.Product.Image))
+        {
+            <img src="@Model.Product.Image" alt="" loading="lazy" class="thumb" />
+        }
+        else
+        {
+            <div class="thumb thumb-empty" aria-hidden="true"></div>
+        }
+    </td>
+    <td>
+        <div class="product-name">@Model.Product.Description</div>
+        @if (!string.IsNullOrWhiteSpace(Model.Product.Category))
+        {
+            <div class="product-meta">@Model.Product.Category</div>
+        }
+        @if (showStore)
+        {
+            <div class="product-meta">@Model.Store.DisplayName</div>
+        }
+    </td>
+    <td class="num">
+        <span class="price-old">@Model.Offer.OriginalPrice.ToString("0.00") kr.</span>
+    </td>
+    <td class="num">
+        <span class="price-new">@Model.Offer.NewPrice.ToString("0.00") kr.</span>
+        @if (Model.UnitPriceLabel is { } unitPrice)
+        {
+            <div class="unit-price @(Model.PricedByWeight ? "exact" : "")"
+                 title="@(Model.PricedByWeight
+                          ? "Sold loose — the API prices this per kilo"
+                          : "Worked out from the pack size in the product name")">@unitPrice</div>
+        }
+        else if (!string.IsNullOrWhiteSpace(Model.Product.Ean))
+        {
+            <button type="button" class="kilo-btn"
+                    data-ean="@Model.Product.Ean"
+                    data-store="@Model.Store.Id"
+                    data-price="@Model.Offer.NewPrice.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                    title="Look this product up by barcode (uses one of the 100 daily calls)">kr./kg?</button>
+        }
+    </td>
+    <td class="num">
+        <span class="badge-discount">&minus;@Model.PercentDiscount.ToString("0")%</span>
+    </td>
+    <td class="num saving">@Model.Saving.ToString("0.00") kr.</td>
+    <td class="num stock">@Model.StockLabel</td>
+    <td class="num">
+        @if (Model.EndsLabel is { } ends)
+        {
+            <span class="ends @(Model.Expired ? "ends-expired" : Model.EndsToday ? "ends-today" : "")"
+                  title="@Model.EndsTitle">@ends</span>
+        }
+    </td>
+</tr>
