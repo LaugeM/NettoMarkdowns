@@ -85,15 +85,17 @@ public sealed class SallingClient(
     /// Returns what is known about a barcode, calling the API only if the store has
     /// nothing. <paramref name="limit"/> is how many calls the caller may take the day
     /// to, so the background filler can leave part of the budget for the button.
+    /// With <paramref name="refresh"/> the saved answer is skipped and asked for again.
+    /// A refresh that gets no answer keeps the saved weight.
     /// </summary>
     public async Task<ProductLoad> LoadProductAsync(
-        string ean, string storeId, ApiQuota quota, int limit, CancellationToken ct)
+        string ean, string storeId, ApiQuota quota, int limit, CancellationToken ct, bool refresh = false)
     {
         if (!HasApiKey) return new ProductLoad(null, "No Salling API key configured.", Stop: true);
         if (string.IsNullOrWhiteSpace(ean)) return new ProductLoad(null, "This item has no barcode.");
         if (string.IsNullOrWhiteSpace(storeId)) return new ProductLoad(null, "This item has no store.");
 
-        if (products.Get(ean) is { } known)
+        if (!refresh && products.Get(ean) is { } known)
         {
             return known.Variant is null
                 ? new ProductLoad(null, "Salling has no product with that barcode.")
@@ -116,7 +118,8 @@ public sealed class SallingClient(
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 // The call was made, so it stays counted; remember the miss to avoid repeating it.
-                products.Save(ean, null);
+                if (refresh) products.Touch(ean);
+                else products.Save(ean, null);
                 return new ProductLoad(null, "Salling has no product with that barcode.");
             }
 
@@ -138,7 +141,8 @@ public sealed class SallingClient(
             }
 
             var variant = JsonSerializer.Deserialize<ProductResponse>(body, JsonOptions)?.Best;
-            products.Save(ean, variant);
+            if (variant is null && refresh) products.Touch(ean);
+            else products.Save(ean, variant);
             return variant is null
                 ? new ProductLoad(null, "Salling has no record for this barcode.")
                 : new ProductLoad(variant);

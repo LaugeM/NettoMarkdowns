@@ -48,6 +48,12 @@ public sealed class SallingOptions
     /// <summary>How many new barcodes the filler looks up after each markdown poll.</summary>
     public int ProductsPerPoll { get; set; } = 5;
 
+    /// <summary>
+    /// How old a saved weight must be before the filler asks for it again. Rechecks only
+    /// use calls left over after new barcodes, and a changed pack size is logged.
+    /// </summary>
+    public TimeSpan ProductsRefreshAfter { get; set; } = TimeSpan.FromDays(180);
+
     /// <summary>Serve built-in demo data instead of calling the API (no key needed).</summary>
     public bool UseSampleData { get; set; }
 

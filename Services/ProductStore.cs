@@ -10,6 +10,9 @@ namespace NettoMarkdowns.Services;
 /// barcode alone. Barcodes Salling doesn't know are remembered too, and asked about
 /// again after <see cref="NotFoundRetry"/> in case they get added later.
 ///
+/// Found weights never expire here. A changed pack size should come with a new barcode,
+/// so the background filler only rechecks old rows with calls it has left over.
+///
 /// Also keeps the day's call count, so a restart doesn't reset the 100 a day budget.
 ///
 /// One row is around 100 bytes and at most 100 are added a day, so the file stays small.
@@ -34,7 +37,7 @@ public sealed class ProductStore
     public string DatabasePath { get; }
 
     /// <summary>A remembered answer. <see cref="Variant"/> is null when Salling had no record.</summary>
-    public sealed record Entry(ProductVariant? Variant);
+    public sealed record Entry(ProductVariant? Variant, DateTimeOffset FetchedAt);
 
     public Entry? Get(string ean) =>
         GetMany([ean]).TryGetValue(ean, out var entry) ? entry : null;
@@ -56,7 +59,7 @@ public sealed class ProductStore
             using var command = connection.CreateCommand();
             var names = chunk.Select((_, i) => "$e" + i).ToArray();
             command.CommandText = $"""
-                SELECT ean, found, contents, contents_unit, price, unit, unit_price
+                SELECT ean, found, contents, contents_unit, price, unit, unit_price, fetched_at
                 FROM product_weights
                 WHERE ean IN ({string.Join(",", names)})
                   AND (found = 1 OR fetched_at >= $retryBefore)
@@ -68,8 +71,10 @@ public sealed class ProductStore
             while (reader.Read())
             {
                 var ean = reader.GetString(0);
+                var fetchedAt = DateTimeOffset.Parse(reader.GetString(7), CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
                 result[ean] = reader.GetInt64(1) == 0
-                    ? new Entry(null)
+                    ? new Entry(null, fetchedAt)
                     : new Entry(new ProductVariant
                     {
                         Ean = ean,
@@ -78,7 +83,7 @@ public sealed class ProductStore
                         Price = NullableDecimal(reader, 4),
                         Unit = reader.IsDBNull(5) ? null : reader.GetString(5),
                         UnitPrice = NullableDecimal(reader, 6)
-                    });
+                    }, fetchedAt);
             }
         }
 
@@ -102,6 +107,17 @@ public sealed class ProductStore
             ("$contents", variant?.Contents), ("$contentsUnit", variant?.ContentsUnit),
             ("$price", variant?.Price), ("$unit", variant?.Unit),
             ("$unitPrice", variant?.UnitPrice), ("$now", Format(DateTimeOffset.UtcNow)));
+    }
+
+    /// <summary>
+    /// Marks a barcode as just checked without changing what is saved. Used when a
+    /// recheck gets no answer, so a known weight isn't thrown away.
+    /// </summary>
+    public void Touch(string ean)
+    {
+        using var connection = Open();
+        Execute(connection, "UPDATE product_weights SET fetched_at = $now WHERE ean = $ean",
+            ("$ean", ean), ("$now", Format(DateTimeOffset.UtcNow)));
     }
 
     public int GetUsage(DateOnly day)

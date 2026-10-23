@@ -6,7 +6,8 @@ namespace NettoMarkdowns.Services;
 /// <summary>
 /// Quietly fills <see cref="ProductStore"/> with pack sizes for products currently on
 /// markdown, a few per poll, so most rows already show kr./kg when you open the page.
-/// It never goes past <see cref="SallingOptions.ProductsBackgroundLimit"/> calls a
+/// Once there is nothing new to look up, spare calls recheck weights older than
+/// <see cref="SallingOptions.ProductsRefreshAfter"/>. It never goes past <see cref="SallingOptions.ProductsBackgroundLimit"/> calls a
 /// day, which leaves the rest for the per-row button.
 /// </summary>
 public sealed class ProductWeightFiller(
@@ -38,27 +39,55 @@ public sealed class ProductWeightFiller(
         if (wanted.Count == 0) return;
 
         var known = products.GetMany(wanted.Select(x => x.Clearance.Product.Ean!));
+
+        // New barcodes come first. Calls left over this poll go to rechecking the oldest
+        // saved weights, in case Salling corrected one or a supplier reused a barcode.
+        var missing = wanted.Where(x => !known.ContainsKey(x.Clearance.Product.Ean!));
+        var staleBefore = DateTimeOffset.UtcNow - _options.ProductsRefreshAfter;
+        var stale = _options.ProductsRefreshAfter > TimeSpan.Zero
+            ? wanted
+                .Where(x => known.TryGetValue(x.Clearance.Product.Ean!, out var e) &&
+                            e.Variant is not null && e.FetchedAt < staleBefore)
+                .OrderBy(x => known[x.Clearance.Product.Ean!].FetchedAt)
+            : Enumerable.Empty<(string StoreId, Clearance Clearance)>();
+
         var fetched = 0;
+        var rechecked = 0;
 
-        foreach (var (storeId, clearance) in wanted)
+        foreach (var (storeId, clearance) in missing.Concat(stale))
         {
-            if (fetched >= perPoll) break;
-            if (known.ContainsKey(clearance.Product.Ean!)) continue;
+            if (fetched + rechecked >= perPoll) break;
 
-            var load = await client.LoadProductAsync(clearance.Product.Ean!, storeId, quota, limit, ct);
+            var ean = clearance.Product.Ean!;
+            var old = known.TryGetValue(ean, out var entry) ? entry.Variant : null;
+
+            var load = await client.LoadProductAsync(ean, storeId, quota, limit, ct, refresh: old is not null);
             if (load.Stop)
             {
                 logger.LogInformation("Product weight filler stopping: {Reason}", load.Error);
-                return;
+                break;
             }
 
-            fetched++;
+            if (old is null)
+            {
+                fetched++;
+                continue;
+            }
+
+            rechecked++;
+            if (load.Variant is { } now &&
+                (now.Contents != old.Contents ||
+                 !string.Equals(now.ContentsUnit, old.ContentsUnit, StringComparison.OrdinalIgnoreCase)))
+            {
+                logger.LogWarning("Pack size changed for {Ean} ({Name}): {OldContents} {OldUnit} is now {NewContents} {NewUnit}",
+                    ean, clearance.Product.Description, old.Contents, old.ContentsUnit, now.Contents, now.ContentsUnit);
+            }
         }
 
-        if (fetched > 0)
+        if (fetched + rechecked > 0)
         {
-            logger.LogInformation("Looked up {Count} product weights, {Used} calls used today",
-                fetched, quota.Used);
+            logger.LogInformation("Looked up {Count} new and rechecked {Rechecked} product weights, {Used} calls used today",
+                fetched, rechecked, quota.Used);
         }
     }
 }

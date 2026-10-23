@@ -105,13 +105,20 @@ header shows how much of the budget is gone.
 While the markdown logger runs, it also fills the cache by itself: after each poll it
 looks up a few barcodes (deepest discounts first) that have no weight yet, skipping
 loose goods and names with a size in them. It stops at 80 calls a day, so 20 stay for
-the button. Settings under `Salling`:
+the button.
+
+Saved weights are trusted, since a product with a new pack size should get a new
+barcode. Salling's data can still be wrong and get fixed later, so when the filler has
+calls left over after new barcodes, it rechecks weights older than 180 days, oldest
+first. A changed pack size is saved and logged as a warning. A recheck that gets no
+answer keeps the old weight. Settings under `Salling`:
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `ProductsDailyLimit` | 100 | Salling's daily cap |
 | `ProductsBackgroundLimit` | 80 | Calls the filler may use a day. 0 turns it off |
-| `ProductsPerPoll` | 5 | New barcodes looked up after each poll |
+| `ProductsPerPoll` | 5 | Barcodes looked up or rechecked after each poll |
+| `ProductsRefreshAfter` | `180.00:00:00` | Age before a saved weight is rechecked. `00:00:00` turns rechecks off |
 | `ProductDatabasePath` | `data/products.db` | Where the cache lives |
 
 `GET /v2/products/{ean}?storeId=…` — the store id is required, since prices differ
@@ -182,7 +189,7 @@ dotnet run --Salling:UseSampleData=true --MarkdownLog:Enabled=true --MarkdownLog
 | `Program.cs` | DI wiring: options binding, memory cache, typed `HttpClient` |
 | `Services/SallingClient.cs` | The API calls, caching, and error mapping |
 | `Services/ProductStore.cs` | SQLite cache of pack sizes, plus the saved daily call count |
-| `Services/ProductWeightFiller.cs` | Background lookups of missing pack sizes, a few per poll |
+| `Services/ProductWeightFiller.cs` | Background lookups of missing pack sizes, a few per poll, plus rechecks of old ones |
 | `Services/SallingOptions.cs` | Bound to the `Salling` config section |
 | `Services/CategoryTree.cs` | Resolves a category label into group + leaf |
 | `Services/SampleDataHandler.cs` | Dev-only canned data (see below) |
