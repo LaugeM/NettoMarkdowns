@@ -134,6 +134,9 @@ public sealed class SallingClient(
                     HttpStatusCode.Forbidden => new ProductLoad(null,
                         "Your API key can't reach the Products EAN API. Add that API to your "
                         + "application on developer.sallinggroup.dev.", Stop: true),
+                    HttpStatusCode.TooManyRequests when IsShortBlock(response, body) => new ProductLoad(null,
+                        "Salling is blocking requests for a minute after too many in a row. Try again shortly.",
+                        Stop: true),
                     HttpStatusCode.TooManyRequests => new ProductLoad(null,
                         "Salling says the daily quota is spent.", Stop: true),
                     _ => new ProductLoad(null, $"Products API returned {(int)response.StatusCode}.")
@@ -154,6 +157,14 @@ public sealed class SallingClient(
             return new ProductLoad(null, "Could not reach the Products API.");
         }
     }
+
+    /// <summary>
+    /// Salling answers 429 both for a spent daily quota and for a short block after too
+    /// many calls in a row. The short one comes with Retry-After or says "try again in".
+    /// </summary>
+    private static bool IsShortBlock(HttpResponseMessage response, string body) =>
+        response.Headers.RetryAfter is not null ||
+        body.Contains("try again in", StringComparison.OrdinalIgnoreCase);
 
     private async Task<IReadOnlyList<StoreClearances>> GetAsync(string path, CancellationToken ct)
     {

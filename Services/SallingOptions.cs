@@ -49,6 +49,12 @@ public sealed class SallingOptions
     public int ProductsPerPoll { get; set; } = 5;
 
     /// <summary>
+    /// Pause before each call the filler makes. Salling blocks the IP for a minute when
+    /// calls come too close together.
+    /// </summary>
+    public TimeSpan ProductsCallSpacing { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
     /// How old a saved weight must be before the filler asks for it again. Rechecks only
     /// use calls left over after new barcodes, and a changed pack size is logged.
     /// </summary>

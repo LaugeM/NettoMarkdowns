@@ -61,6 +61,13 @@ public sealed class ProductWeightFiller(
             var ean = clearance.Product.Ean!;
             var old = known.TryGetValue(ean, out var entry) ? entry.Variant : null;
 
+            // Every call here reaches the API, and Salling blocks bursts, so wait first.
+            // The poll that started the filler has just made calls of its own.
+            if (_options.ProductsCallSpacing > TimeSpan.Zero)
+            {
+                await Task.Delay(_options.ProductsCallSpacing, ct);
+            }
+
             var load = await client.LoadProductAsync(ean, storeId, quota, limit, ct, refresh: old is not null);
             if (load.Stop)
             {

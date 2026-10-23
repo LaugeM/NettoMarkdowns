@@ -118,6 +118,7 @@ answer keeps the old weight. Settings under `Salling`:
 | `ProductsDailyLimit` | 100 | Salling's daily cap |
 | `ProductsBackgroundLimit` | 80 | Calls the filler may use a day. 0 turns it off |
 | `ProductsPerPoll` | 5 | Barcodes looked up or rechecked after each poll |
+| `ProductsCallSpacing` | `00:00:05` | Pause before each filler call, since Salling blocks bursts for a minute |
 | `ProductsRefreshAfter` | `180.00:00:00` | Age before a saved weight is rechecked. `00:00:00` turns rechecks off |
 | `ProductDatabasePath` | `data/products.db` | Where the cache lives |
 
