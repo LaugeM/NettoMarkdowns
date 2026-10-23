@@ -46,7 +46,7 @@ public sealed class SampleDataHandler : DelegatingHandler
             product = new
             {
                 description = name,
-                ean = Random.Shared.NextInt64(5_700_000_000_000, 5_799_999_999_999).ToString(),
+                ean = StableEan(name),
                 image = (string?)null,
                 categories = new Dictionary<string, string> { ["da"] = category }
             }
@@ -104,5 +104,16 @@ public sealed class SampleDataHandler : DelegatingHandler
         };
 
         return JsonSerializer.Serialize(payload);
+    }
+
+    /// <summary>
+    /// Same name, same barcode, across calls and restarts, so the markdown log sees
+    /// a repeat poll as the same offers rather than all new ones.
+    /// </summary>
+    private static string StableEan(string name)
+    {
+        ulong hash = 14695981039346656037; // FNV-1a
+        foreach (var c in name) hash = (hash ^ c) * 1099511628211;
+        return (5_700_000_000_000 + (long)(hash % 99_999_999_999)).ToString();
     }
 }

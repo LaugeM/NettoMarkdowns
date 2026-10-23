@@ -1,0 +1,27 @@
+[Unit]
+Description=NettoMarkdowns dashboard and markdown logger
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=lauge
+WorkingDirectory=/home/lauge/nettomarkdowns/app
+ExecStart=/home/lauge/nettomarkdowns/app/NettoMarkdowns
+EnvironmentFile=/etc/nettomarkdowns/nettomarkdowns.env
+Environment=ASPNETCORE_URLS=http://0.0.0.0:5062
+Environment=MarkdownLog__Enabled=true
+Environment=MarkdownLog__DatabasePath=/var/lib/nettomarkdowns/markdowns.db
+# Danish prices and local closing times, same as on the desktop.
+Environment=TZ=Europe/Copenhagen
+Environment=LANG=da_DK.UTF-8
+# Workstation GC uses far less memory than the server GC that web apps default to.
+Environment=DOTNET_gcServer=0
+# Creates /var/lib/nettomarkdowns owned by User.
+StateDirectory=nettomarkdowns
+Restart=on-failure
+RestartSec=30
+MemoryMax=400M
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

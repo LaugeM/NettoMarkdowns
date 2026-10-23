@@ -36,6 +36,20 @@ if (builder.Configuration.GetValue<bool>($"{SallingOptions.SectionName}:UseSampl
     sallingClient.AddHttpMessageHandler<SampleDataHandler>();
 }
 
+// Markdown log: polls in the background and keeps a history in SQLite for statistics.
+var markdownLog = builder.Configuration.GetSection(MarkdownLogOptions.SectionName);
+builder.Services.Configure<MarkdownLogOptions>(markdownLog);
+if (markdownLog.GetValue<bool>(nameof(MarkdownLogOptions.Enabled)))
+{
+    builder.Services.AddSingleton(serviceProvider =>
+    {
+        var path = serviceProvider.GetRequiredService<IOptions<MarkdownLogOptions>>().Value.DatabasePath;
+        var root = serviceProvider.GetRequiredService<IHostEnvironment>().ContentRootPath;
+        return new MarkdownStore(Path.Combine(root, path));
+    });
+    builder.Services.AddHostedService<MarkdownLogService>();
+}
+
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())

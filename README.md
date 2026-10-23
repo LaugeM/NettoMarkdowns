@@ -5,7 +5,8 @@ A local ASP.NET Core (Razor Pages) dashboard over Salling Group's public
 store has marked down right now, the original price, the reduced price, the
 discount, the stock count and how long the markdown is valid.
 
-Live view only — nothing is stored between requests.
+The dashboard is a live view and stores nothing between requests. Separately, an
+optional markdown logger can keep a history in SQLite (see [Markdown log](#markdown-log)).
 
 ## Setup
 
@@ -135,6 +136,31 @@ Only the leaf checkboxes are named `Categories`. The group checkbox is a
 UI-only control driven by `wwwroot/js/site.js`, so the server still receives a
 flat list and doesn't need to know the tree exists.
 
+## Markdown log
+
+A background job that polls the Food Waste API on an interval and writes every
+markdown to SQLite, so it is possible to work out later when each store marks things
+down and how fast they sell. It is off by default and meant to run on the home
+server. [deploy/README.md](deploy/README.md) covers setup and what each table holds.
+
+```json
+"MarkdownLog": {
+  "Enabled": false,
+  "Interval": "00:15:00",
+  "Zips": [],
+  "DatabasePath": "data/markdowns.db"
+}
+```
+
+Empty `Zips` means `Salling:DefaultZips`. `Salling:Brands` applies here too. A
+relative `DatabasePath` is resolved against the app folder.
+
+To try it locally without a key:
+
+```bash
+dotnet run --Salling:UseSampleData=true --MarkdownLog:Enabled=true --MarkdownLog:Interval=00:00:10
+```
+
 ## Layout
 
 | Path | What it is |
@@ -144,6 +170,9 @@ flat list and doesn't need to know the tree exists.
 | `Services/SallingOptions.cs` | Bound to the `Salling` config section |
 | `Services/CategoryTree.cs` | Resolves a category label into group + leaf |
 | `Services/SampleDataHandler.cs` | Dev-only canned data (see below) |
+| `Services/MarkdownLogService.cs` | Background polling for the markdown log |
+| `Services/MarkdownStore.cs` | The SQLite schema and how each poll is written |
+| `deploy/` | systemd unit, env file template and deploy script for the home server |
 | `Models/SallingModels.cs` | The JSON response shape |
 | `Pages/Index.cshtml(.cs)` | Filters, grouping, sorting, and the view |
 
