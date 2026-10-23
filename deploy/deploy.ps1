@@ -28,6 +28,10 @@ Check "Upload"
 scp deploy/install-on-server.sh "${Server}:apps/nettomarkdowns/install-on-server.sh"
 Check "Upload"
 
+# The install script puts this in place if it differs from the installed one.
+scp deploy/nettomarkdowns.service "${Server}:apps/nettomarkdowns/nettomarkdowns.service"
+Check "Upload"
+
 # -t so sudo can ask for the password when it restarts the service.
 ssh -t $Server "bash apps/nettomarkdowns/install-on-server.sh"
 Check "Install on server"

@@ -83,6 +83,9 @@ Run `./deploy/deploy.ps1` again. It installs the new version next to the old one
 swaps them and restarts the service, which asks for the sudo password. The previous
 version is kept in `~/apps/nettomarkdowns/app.old`.
 
+It also uploads `nettomarkdowns.service` and installs it when it differs from the one
+in `/etc/systemd/system`, so changes to the unit file reach the server with the app.
+
 ## What gets stored
 
 All times in the database are UTC.

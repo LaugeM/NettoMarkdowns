@@ -16,7 +16,16 @@ rm -rf app.old
 if [ -d app ]; then mv app app.old; fi
 mv app.new app
 
+unit=/etc/systemd/system/nettomarkdowns.service
+
 if systemctl cat nettomarkdowns >/dev/null 2>&1; then
+    # The unit file sets paths like where the databases live, so keep it in step
+    # with the repo. Unchanged files are left alone.
+    if ! cmp -s nettomarkdowns.service "$unit"; then
+        sudo install -m 644 nettomarkdowns.service "$unit"
+        sudo systemctl daemon-reload
+        echo "Updated the service file."
+    fi
     sudo systemctl restart nettomarkdowns
     echo "Restarted nettomarkdowns."
 else
