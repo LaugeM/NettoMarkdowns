@@ -5,35 +5,28 @@ dashboard and runs the markdown logger, which polls the Food Waste API every 15
 minutes and keeps the history in SQLite for statistics later.
 
 The app is built on the Windows machine as a self-contained Linux program, so the
-server needs no .NET install.
+server needs no .NET install. Like bilalarm, everything lives in one folder:
+
+| Path on the server | What it is |
+| --- | --- |
+| `~/apps/nettomarkdowns/app` | The program. `app.old` is the previous version |
+| `~/apps/nettomarkdowns/data/markdowns.db` | The SQLite history |
+| `~/apps/nettomarkdowns/nettomarkdowns.env` | API key and postcodes |
 
 ## One-time setup
 
-### On the server
+### 1. Packages (server)
 
-ICU is needed for Danish number formatting. On Debian 13 it is `libicu76`. If apt
-can't find that, run `apt search libicu` and install the `libicuNN` it lists.
-`sqlite3` is for looking at the data by hand.
+ICU is needed for Danish number formatting. `sqlite3` is for looking at the data by
+hand.
 
 ```bash
 sudo apt install -y libicu76 sqlite3
 ```
 
-Create the config file with the API key and postcodes:
+### 2. Upload the app (Windows)
 
-```bash
-sudo mkdir -p /etc/nettomarkdowns
-sudo nano /etc/nettomarkdowns/nettomarkdowns.env
-sudo chmod 600 /etc/nettomarkdowns/nettomarkdowns.env
-```
-
-Paste in the contents of [nettomarkdowns.env.example](nettomarkdowns.env.example) and
-fill in the key. The file is read by systemd as root, so only root needs to read it.
-
-### On the Windows machine
-
-From the repo root, in PowerShell. This builds the app, uploads it to
-`~/nettomarkdowns/app` and copies the install script:
+From the repo root, in PowerShell:
 
 ```powershell
 ./deploy/deploy.ps1
@@ -41,13 +34,22 @@ From the repo root, in PowerShell. This builds the app, uploads it to
 
 If `homeserver` doesn't resolve, pass the address: `./deploy/deploy.ps1 -Server lauge@192.168.x.x`.
 
-Then copy the service file over:
+### 3. API key and postcodes (server)
+
+```bash
+cd ~/apps/nettomarkdowns
+nano nettomarkdowns.env
+chmod 600 nettomarkdowns.env
+```
+
+Paste in the contents of [nettomarkdowns.env.example](nettomarkdowns.env.example) and
+fill in the key and postcodes.
+
+### 4. The service (Windows, then server)
 
 ```powershell
 scp deploy/nettomarkdowns.service lauge@homeserver:
 ```
-
-### Back on the server
 
 ```bash
 sudo mv ~/nettomarkdowns.service /etc/systemd/system/
@@ -71,18 +73,18 @@ not forwarded from the router.
 The latest polls, including failed ones:
 
 ```bash
-sqlite3 /var/lib/nettomarkdowns/markdowns.db "SELECT * FROM polls ORDER BY id DESC LIMIT 10"
+sqlite3 ~/apps/nettomarkdowns/data/markdowns.db "SELECT * FROM polls ORDER BY id DESC LIMIT 10"
 ```
 
 ## Updating
 
 Run `./deploy/deploy.ps1` again. It installs the new version next to the old one,
-swaps them and restarts the service. The previous version is kept in
-`~/nettomarkdowns/app.old`.
+swaps them and restarts the service, which asks for the sudo password. The previous
+version is kept in `~/apps/nettomarkdowns/app.old`.
 
 ## What gets stored
 
-The database is `/var/lib/nettomarkdowns/markdowns.db`. All times are UTC.
+All times in the database are UTC.
 
 | Table | One row per |
 | --- | --- |
@@ -102,5 +104,5 @@ the data can be told apart from quiet periods.
 To back it up while the service is running:
 
 ```bash
-sqlite3 /var/lib/nettomarkdowns/markdowns.db ".backup /home/lauge/markdowns-backup.db"
+sqlite3 ~/apps/nettomarkdowns/data/markdowns.db ".backup /home/lauge/markdowns-backup.db"
 ```

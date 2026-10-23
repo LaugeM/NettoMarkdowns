@@ -19,15 +19,15 @@ Check "dotnet publish"
 tar -czf $archive -C $out .
 Check "tar"
 
-ssh $Server "mkdir -p nettomarkdowns"
+ssh $Server "mkdir -p apps/nettomarkdowns"
 Check "ssh"
 
 scp $archive "${Server}:nettomarkdowns.tar.gz"
 Check "Upload"
 
-scp deploy/install-on-server.sh "${Server}:nettomarkdowns/install-on-server.sh"
+scp deploy/install-on-server.sh "${Server}:apps/nettomarkdowns/install-on-server.sh"
 Check "Upload"
 
 # -t so sudo can ask for the password when it restarts the service.
-ssh -t $Server "bash nettomarkdowns/install-on-server.sh"
+ssh -t $Server "bash apps/nettomarkdowns/install-on-server.sh"
 Check "Install on server"

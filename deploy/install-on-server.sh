@@ -3,7 +3,8 @@
 # Unpacks next to the running copy and then swaps folders, so a failed upload never
 # leaves the service half replaced. The previous version is kept as app.old.
 set -e
-cd ~/nettomarkdowns
+cd ~/apps/nettomarkdowns
+mkdir -p data
 
 rm -rf app.new
 mkdir app.new
@@ -19,5 +20,5 @@ if systemctl cat nettomarkdowns >/dev/null 2>&1; then
     sudo systemctl restart nettomarkdowns
     echo "Restarted nettomarkdowns."
 else
-    echo "Installed in ~/nettomarkdowns/app. The service isn't set up yet, see deploy/README.md."
+    echo "Installed in ~/apps/nettomarkdowns/app. The service isn't set up yet, see deploy/README.md."
 fi
