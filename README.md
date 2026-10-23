@@ -94,11 +94,25 @@ three ways, in descending order of confidence:
 3. **The kr./kg button**, on every remaining row. It calls the Products EAN API for
    that one barcode.
 
-That third one is a button rather than automatic because the Products EAN API allows
-**100 requests a day**. One press is one call. Results are cached for a week (pack
-weights don't change), failures refund the counter, and the header shows how much of
-the budget is gone. `Salling:ProductsDailyLimit` and `Salling:ProductCacheDuration`
-tune it.
+That third one is a button rather than something every row does, because the
+Products EAN API allows **100 requests a day**. One press is one call. Every answer is
+saved in `data/products.db` (a few MB at most, roughly 100 bytes a product), so a
+barcode is only ever looked up once, across restarts and across stores. Barcodes
+Salling doesn't know are saved too and asked again after 30 days. Failed calls refund
+the counter, and the day's count is saved as well, so a restart doesn't reset it. The
+header shows how much of the budget is gone.
+
+While the markdown logger runs, it also fills the cache by itself: after each poll it
+looks up a few barcodes (deepest discounts first) that have no weight yet, skipping
+loose goods and names with a size in them. It stops at 80 calls a day, so 20 stay for
+the button. Settings under `Salling`:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `ProductsDailyLimit` | 100 | Salling's daily cap |
+| `ProductsBackgroundLimit` | 80 | Calls the filler may use a day. 0 turns it off |
+| `ProductsPerPoll` | 5 | New barcodes looked up after each poll |
+| `ProductDatabasePath` | `data/products.db` | Where the cache lives |
 
 `GET /v2/products/{ean}?storeId=…` — the store id is required, since prices differ
 between stores. It answers with an in-store and a webshop record, either of which may
@@ -167,6 +181,8 @@ dotnet run --Salling:UseSampleData=true --MarkdownLog:Enabled=true --MarkdownLog
 | --- | --- |
 | `Program.cs` | DI wiring: options binding, memory cache, typed `HttpClient` |
 | `Services/SallingClient.cs` | The API calls, caching, and error mapping |
+| `Services/ProductStore.cs` | SQLite cache of pack sizes, plus the saved daily call count |
+| `Services/ProductWeightFiller.cs` | Background lookups of missing pack sizes, a few per poll |
 | `Services/SallingOptions.cs` | Bound to the `Salling` config section |
 | `Services/CategoryTree.cs` | Resolves a category label into group + leaf |
 | `Services/SampleDataHandler.cs` | Dev-only canned data (see below) |

@@ -55,6 +55,8 @@ public sealed class MarkdownLogService(
             var result = store.RecordPoll(at, stores);
             logger.LogInformation("Logged {Stores} stores, {Offers} offers: {New} new, {Gone} gone",
                 result.Stores, result.Offers, result.New, result.Gone);
+
+            await FillWeightsAsync(scope, stores, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -72,6 +74,24 @@ public sealed class MarkdownLogService(
             {
                 logger.LogError(dbEx, "Could not record the failed poll");
             }
+        }
+    }
+
+    /// <summary>A failure here must not count as a failed poll; the offers are already saved.</summary>
+    private async Task FillWeightsAsync(
+        IServiceScope scope, IReadOnlyList<Models.StoreClearances> stores, CancellationToken ct)
+    {
+        try
+        {
+            await scope.ServiceProvider.GetRequiredService<ProductWeightFiller>().FillAsync(stores, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Shutting down.
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Product weight filler failed");
         }
     }
 }

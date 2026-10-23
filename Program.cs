@@ -6,6 +6,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorPages();
 builder.Services.AddMemoryCache();
+
+// Pack sizes already looked up, plus the day's API call count. Small and always on.
+builder.Services.AddSingleton(serviceProvider =>
+{
+    var path = serviceProvider.GetRequiredService<IOptions<SallingOptions>>().Value.ProductDatabasePath;
+    var root = serviceProvider.GetRequiredService<IHostEnvironment>().ContentRootPath;
+    return new ProductStore(Path.Combine(root, path));
+});
 builder.Services.AddSingleton<ApiQuota>();
 
 // Binds the "Salling" section of appsettings.json / user-secrets to SallingOptions.
@@ -47,6 +55,7 @@ if (markdownLog.GetValue<bool>(nameof(MarkdownLogOptions.Enabled)))
         var root = serviceProvider.GetRequiredService<IHostEnvironment>().ContentRootPath;
         return new MarkdownStore(Path.Combine(root, path));
     });
+    builder.Services.AddTransient<ProductWeightFiller>();
     builder.Services.AddHostedService<MarkdownLogService>();
 }
 

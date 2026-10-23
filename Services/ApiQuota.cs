@@ -2,14 +2,13 @@ namespace NettoMarkdowns.Services;
 
 /// <summary>
 /// Counts calls to the Products EAN API, which is capped at 100 requests a day.
-/// In-memory and per-process, so it resets when the app restarts — it exists to stop
-/// a stray loop burning the day's budget, not to be an exact ledger. Salling's own
-/// 429 remains the real authority.
+/// The count is saved in <see cref="ProductStore"/>, so a restart or a redeploy
+/// doesn't hand back a fresh budget. Salling's own 429 remains the real authority.
 /// </summary>
-public sealed class ApiQuota(ILogger<ApiQuota> logger)
+public sealed class ApiQuota(ProductStore store, ILogger<ApiQuota> logger)
 {
     private readonly Lock _gate = new();
-    private DateOnly _day = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _day;
     private int _used;
 
     public int Used
@@ -17,7 +16,7 @@ public sealed class ApiQuota(ILogger<ApiQuota> logger)
         get { lock (_gate) { RollOver(); return _used; } }
     }
 
-    /// <summary>Takes one unit if any remain. False means the cap is reached for today.</summary>
+    /// <summary>Takes one unit if fewer than <paramref name="limit"/> are used today. False means no.</summary>
     public bool TryConsume(int limit)
     {
         lock (_gate)
@@ -30,6 +29,7 @@ public sealed class ApiQuota(ILogger<ApiQuota> logger)
             }
 
             _used++;
+            Save();
             return true;
         }
     }
@@ -39,7 +39,9 @@ public sealed class ApiQuota(ILogger<ApiQuota> logger)
     {
         lock (_gate)
         {
-            if (_used > 0) _used--;
+            if (_used <= 0) return;
+            _used--;
+            Save();
         }
     }
 
@@ -49,6 +51,8 @@ public sealed class ApiQuota(ILogger<ApiQuota> logger)
         if (today == _day) return;
 
         _day = today;
-        _used = 0;
+        _used = store.GetUsage(today);
     }
+
+    private void Save() => store.SetUsage(_day, _used);
 }

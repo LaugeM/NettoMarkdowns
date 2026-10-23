@@ -11,6 +11,7 @@ server needs no .NET install. Like bilalarm, everything lives in one folder:
 | --- | --- |
 | `~/apps/nettomarkdowns/app` | The program. `app.old` is the previous version |
 | `~/apps/nettomarkdowns/data/markdowns.db` | The SQLite history |
+| `~/apps/nettomarkdowns/data/products.db` | Saved pack sizes and today's API call count |
 | `~/apps/nettomarkdowns/nettomarkdowns.env` | API key and postcodes |
 
 ## One-time setup

@@ -31,10 +31,12 @@
         <span class="price-new">@Model.Offer.NewPrice.ToString("0.00") kr.</span>
         @if (Model.UnitPriceLabel is { } unitPrice)
         {
-            <div class="unit-price @(Model.PricedByWeight ? "exact" : "")"
-                 title="@(Model.PricedByWeight
-                          ? "Sold loose — the API prices this per kilo"
-                          : "Worked out from the pack size in the product name")">@unitPrice</div>
+            <div class="unit-price @(Model.PricedByWeight || Model.Cached is not null ? "exact" : "")"
+                 title="@Model.UnitPriceTitle">@unitPrice</div>
+        }
+        else if (Model.WeightUnavailable)
+        {
+            <div class="unit-price failed" title="@Model.UnitPriceTitle">no weight</div>
         }
         else if (!string.IsNullOrWhiteSpace(Model.Product.Ean))
         {

@@ -14,7 +14,10 @@ public sealed class SampleDataHandler : DelegatingHandler
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var json = Build();
+        // Product lookups get a fixed 250 g pack, so the weight cache can be tried offline.
+        var json = request.RequestUri?.AbsolutePath.Contains("/products/", StringComparison.Ordinal) == true
+            ? """{"instore":{"contents":250,"contentsUnit":"g","price":30,"unit":"kg","unitPrice":120}}"""
+            : Build();
         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
             RequestMessage = request,

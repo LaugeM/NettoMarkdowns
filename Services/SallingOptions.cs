@@ -33,8 +33,20 @@ public sealed class SallingOptions
     /// </summary>
     public int ProductsDailyLimit { get; set; } = 100;
 
-    /// <summary>How long a product lookup is reused. Pack weights don't change.</summary>
-    public TimeSpan ProductCacheDuration { get; set; } = TimeSpan.FromDays(7);
+    /// <summary>
+    /// Where pack sizes already looked up are kept, so each barcode costs one call
+    /// ever. Relative paths are resolved against the app folder.
+    /// </summary>
+    public string ProductDatabasePath { get; set; } = "data/products.db";
+
+    /// <summary>
+    /// How many of the day's calls the background filler may use. The rest are left
+    /// for the per-row button. 0 turns the filler off.
+    /// </summary>
+    public int ProductsBackgroundLimit { get; set; } = 80;
+
+    /// <summary>How many new barcodes the filler looks up after each markdown poll.</summary>
+    public int ProductsPerPoll { get; set; } = 5;
 
     /// <summary>Serve built-in demo data instead of calling the API (no key needed).</summary>
     public bool UseSampleData { get; set; }

@@ -14,6 +14,7 @@ namespace NettoMarkdowns.Services;
 public sealed class SallingClient(
     HttpClient http,
     IMemoryCache cache,
+    ProductStore products,
     IOptions<SallingOptions> options,
     ILogger<SallingClient> logger)
 {
@@ -58,29 +59,51 @@ public sealed class SallingClient(
             .ToList();
     }
 
+    /// <summary>The outcome of asking for one product's pack size.</summary>
+    /// <param name="Variant">The product, when known.</param>
+    /// <param name="Error">Why there is no <paramref name="Variant"/>, in words fit for the page.</param>
+    /// <param name="Stop">True when asking for more would be pointless right now (quota spent, key refused).</param>
+    public sealed record ProductLoad(ProductVariant? Variant, string? Error = null, bool Stop = false);
+
     /// <summary>
-    /// Looks one product up by barcode to establish a price per kilo. The endpoint is
-    /// per store — prices differ between them — so the store id is required.
-    /// Deliberately not called for whole pages: the quota is 100 a day, so this runs
-    /// only when you press the button on a row, and results are cached for a week.
+    /// Looks one product up by barcode to establish a price per kilo. Answers come from
+    /// the local <see cref="ProductStore"/> when possible; only an unknown barcode costs
+    /// one of the 100 daily calls, and the answer is kept for good afterwards.
+    /// The endpoint is per store, so a store id is required for the call itself, but the
+    /// pack size is the same everywhere and is saved by barcode alone.
     /// </summary>
     public async Task<ProductLookup> GetProductAsync(
         string ean, string storeId, decimal currentPrice, ApiQuota quota, CancellationToken ct)
     {
-        if (!HasApiKey) return ProductLookup.Failed("No Salling API key configured.");
-        if (string.IsNullOrWhiteSpace(ean)) return ProductLookup.Failed("This item has no barcode.");
-        if (string.IsNullOrWhiteSpace(storeId)) return ProductLookup.Failed("This item has no store.");
+        var load = await LoadProductAsync(ean, storeId, quota, _options.ProductsDailyLimit, ct);
+        return load.Variant is null
+            ? ProductLookup.Failed(load.Error ?? "Salling has no record for this barcode.")
+            : ProductLookup.From(new ProductResponse { Instore = load.Variant }, currentPrice);
+    }
 
-        var cacheKey = $"product:{storeId}:{ean}";
-        if (cache.TryGetValue(cacheKey, out ProductResponse? cached) && cached is not null)
+    /// <summary>
+    /// Returns what is known about a barcode, calling the API only if the store has
+    /// nothing. <paramref name="limit"/> is how many calls the caller may take the day
+    /// to, so the background filler can leave part of the budget for the button.
+    /// </summary>
+    public async Task<ProductLoad> LoadProductAsync(
+        string ean, string storeId, ApiQuota quota, int limit, CancellationToken ct)
+    {
+        if (!HasApiKey) return new ProductLoad(null, "No Salling API key configured.", Stop: true);
+        if (string.IsNullOrWhiteSpace(ean)) return new ProductLoad(null, "This item has no barcode.");
+        if (string.IsNullOrWhiteSpace(storeId)) return new ProductLoad(null, "This item has no store.");
+
+        if (products.Get(ean) is { } known)
         {
-            return ProductLookup.From(cached, currentPrice);
+            return known.Variant is null
+                ? new ProductLoad(null, "Salling has no product with that barcode.")
+                : new ProductLoad(known.Variant);
         }
 
-        if (!quota.TryConsume(_options.ProductsDailyLimit))
+        if (!quota.TryConsume(limit))
         {
-            return ProductLookup.Failed(
-                $"Daily limit of {_options.ProductsDailyLimit} product lookups reached. Resets tomorrow.");
+            return new ProductLoad(null,
+                $"Daily limit of {limit} product lookups reached. Resets tomorrow.", Stop: true);
         }
 
         var path = $"v2/products/{Uri.EscapeDataString(ean)}?storeId={Uri.EscapeDataString(storeId)}";
@@ -90,32 +113,41 @@ public sealed class SallingClient(
             using var response = await http.GetAsync(path, ct);
             var body = await response.Content.ReadAsStringAsync(ct);
 
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                // The call was made, so it stays counted; remember the miss to avoid repeating it.
+                products.Save(ean, null);
+                return new ProductLoad(null, "Salling has no product with that barcode.");
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 quota.Refund();
                 logger.LogWarning("Products API {Status} for {Ean}: {Body}",
                     (int)response.StatusCode, ean, body);
 
-                return ProductLookup.Failed(response.StatusCode switch
+                return response.StatusCode switch
                 {
-                    HttpStatusCode.Forbidden =>
+                    HttpStatusCode.Forbidden => new ProductLoad(null,
                         "Your API key can't reach the Products EAN API. Add that API to your "
-                        + "application on developer.sallinggroup.dev.",
-                    HttpStatusCode.NotFound => "Salling has no product with that barcode.",
-                    HttpStatusCode.TooManyRequests => "Salling says the daily quota is spent.",
-                    _ => $"Products API returned {(int)response.StatusCode}."
-                });
+                        + "application on developer.sallinggroup.dev.", Stop: true),
+                    HttpStatusCode.TooManyRequests => new ProductLoad(null,
+                        "Salling says the daily quota is spent.", Stop: true),
+                    _ => new ProductLoad(null, $"Products API returned {(int)response.StatusCode}.")
+                };
             }
 
-            var product = JsonSerializer.Deserialize<ProductResponse>(body, JsonOptions);
-            cache.Set(cacheKey, product, _options.ProductCacheDuration);
-            return ProductLookup.From(product, currentPrice);
+            var variant = JsonSerializer.Deserialize<ProductResponse>(body, JsonOptions)?.Best;
+            products.Save(ean, variant);
+            return variant is null
+                ? new ProductLoad(null, "Salling has no record for this barcode.")
+                : new ProductLoad(variant);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             quota.Refund();
             logger.LogError(ex, "Product lookup failed for {Ean}", ean);
-            return ProductLookup.Failed("Could not reach the Products API.");
+            return new ProductLoad(null, "Could not reach the Products API.");
         }
     }
 

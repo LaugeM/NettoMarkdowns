@@ -11,6 +11,7 @@ public class IndexModel(
     SallingClient client,
     IOptions<SallingOptions> options,
     ApiQuota quota,
+    ProductStore products,
     ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>Remembers the picked stores between visits, so the choice survives a restart.</summary>
@@ -163,9 +164,19 @@ public class IndexModel(
             // Everything that passes every filter *except* the category one. The
             // category list is built from these, so its counts always match what
             // you'd actually get by ticking a box, and no dead options are offered.
+            // Pack sizes already saved, fetched in one query for the whole page.
+            var known = products.GetMany(shown
+                .SelectMany(s => s.Clearances)
+                .Select(c => c.Product.Ean ?? ""));
+
             var candidates = shown
                 .Select(s => (s.Store, Items: s.Clearances
-                    .Select(c => new MarkdownItem(s.Store, c.Product, c.Offer))
+                    .Select(c => new MarkdownItem(s.Store, c.Product, c.Offer)
+                    {
+                        Cached = c.Product.Ean is { Length: > 0 } ean && known.TryGetValue(ean, out var entry)
+                            ? entry
+                            : null
+                    })
                     .Where(MatchesFilters)
                     .ToList()))
                 .ToList();
@@ -336,6 +347,27 @@ public class IndexModel(
 
     public sealed record MarkdownItem(Store Store, Product Product, Offer Offer)
     {
+        /// <summary>What an earlier Products API lookup found out about this barcode, if anything.</summary>
+        public ProductStore.Entry? Cached { get; init; }
+
+        private ProductLookup? CachedLookup => Cached is null
+            ? null
+            : ProductLookup.From(
+                Cached.Variant is null ? null : new ProductResponse { Instore = Cached.Variant },
+                Offer.NewPrice);
+
+        /// <summary>True when the API was asked and has no usable weight, so the button would waste a call.</summary>
+        public bool WeightUnavailable => UnitPriceLabel is null && CachedLookup is { Ok: false };
+
+        /// <summary>Hover text for the price per kilo: where it came from, or why there is none.</summary>
+        public string UnitPriceTitle => PricedByWeight
+            ? "Sold loose — the API prices this per kilo"
+            : PackSizeParser.Parse(Product.Description) is not null
+                ? "Worked out from the pack size in the product name"
+                : CachedLookup is { } lookup
+                    ? lookup.Ok ? lookup.Detail ?? "" : lookup.Error ?? ""
+                    : "";
+
         /// <summary>
         /// Dates are formatted in the interface's language rather than the server's
         /// culture, so "Today, 8 Sep" doesn't sit next to a Danish "tors. 10 sep.".
@@ -380,7 +412,11 @@ public class IndexModel(
             {
                 if (PricedByWeight) return $"{Offer.NewPrice:0.00} kr./kg";
 
-                if (PackSizeParser.Parse(Product.Description) is not { } size) return null;
+                if (PackSizeParser.Parse(Product.Description) is not { } size)
+                {
+                    return CachedLookup is { Ok: true } lookup ? lookup.UnitPrice : null;
+                }
+
                 if (size.Amount <= 0) return null;
 
                 var perUnit = Offer.NewPrice / size.Amount;

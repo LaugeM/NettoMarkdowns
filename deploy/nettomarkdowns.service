@@ -11,6 +11,7 @@ EnvironmentFile=/home/lauge/apps/nettomarkdowns/nettomarkdowns.env
 Environment=ASPNETCORE_URLS=http://0.0.0.0:5062
 Environment=MarkdownLog__Enabled=true
 Environment=MarkdownLog__DatabasePath=/home/lauge/apps/nettomarkdowns/data/markdowns.db
+Environment=Salling__ProductDatabasePath=/home/lauge/apps/nettomarkdowns/data/products.db
 # Danish prices and local closing times, same as on the desktop.
 Environment=TZ=Europe/Copenhagen
 Environment=LANG=da_DK.UTF-8
