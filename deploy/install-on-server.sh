@@ -28,6 +28,9 @@ if systemctl cat nettomarkdowns >/dev/null 2>&1; then
     fi
     sudo systemctl restart nettomarkdowns
     echo "Restarted nettomarkdowns."
+    # Publish the dashboard on the tailnet as http://homeserver:5062. Plain HTTP, since
+    # WireGuard already encrypts it. Funnel stays off, so nothing is public. Safe to rerun.
+    sudo tailscale serve --bg --http=5062 http://127.0.0.1:5062
 else
     echo "Installed in ~/apps/nettomarkdowns/app. The service isn't set up yet, see deploy/README.md."
 fi

@@ -61,6 +61,26 @@ if (markdownLog.GetValue<bool>(nameof(MarkdownLogOptions.Enabled)))
 
 var app = builder.Build();
 
+// On the server the app is reached through Tailscale Serve, which adds the Tailscale login
+// of the device that sent the request and drops any copy the client sent. When logins are
+// listed, every other request gets 403. Empty means no check, for running it locally.
+var allowedLogins = (app.Configuration["Access:AllowedLogins"] ?? "")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+if (allowedLogins.Count > 0)
+{
+    app.Use(async (context, next) =>
+    {
+        if (!allowedLogins.Contains(context.Request.Headers["Tailscale-User-Login"].ToString()))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsync("Forbidden");
+            return;
+        }
+        await next();
+    });
+}
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
