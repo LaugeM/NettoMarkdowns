@@ -8,8 +8,11 @@ User=lauge
 WorkingDirectory=/home/lauge/apps/nettomarkdowns/app
 ExecStart=/home/lauge/apps/nettomarkdowns/app/NettoMarkdowns
 EnvironmentFile=/home/lauge/apps/nettomarkdowns/nettomarkdowns.env
-# No login, so localhost only. Reach it through an SSH tunnel, see deploy/README.md.
+# Localhost only. Tailscale Serve is the way in, and only this Tailscale login gets
+# through, see deploy/README.md. Never bind it to 0.0.0.0 or the Tailscale address,
+# where anyone could send the login header.
 Environment=ASPNETCORE_URLS=http://127.0.0.1:5062
+Environment=Access__AllowedLogins=LaugeM@github
 Environment=MarkdownLog__Enabled=true
 Environment=MarkdownLog__DatabasePath=/home/lauge/apps/nettomarkdowns/data/markdowns.db
 Environment=Salling__ProductDatabasePath=/home/lauge/apps/nettomarkdowns/data/products.db
