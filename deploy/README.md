@@ -67,9 +67,23 @@ journalctl -u nettomarkdowns -f
 
 Every poll writes one line like `Logged 4 stores, 37 offers: 3 new, 1 gone`.
 
-The dashboard is at `http://homeserver:5062`, or over Tailscale from the phone. It
-has no login, so it should only be reachable on the home network and the tailnet,
-not forwarded from the router.
+The dashboard has no login, so it only listens on 127.0.0.1 on the server. Open it
+through an SSH tunnel:
+
+```powershell
+./deploy/panel.ps1
+```
+
+That opens the tunnel and `http://127.0.0.1:5062` in the browser. Close the window to
+close the tunnel. Without the script:
+
+```bash
+ssh -N -L 5062:127.0.0.1:5062 lauge@homeserver
+```
+
+Tailscale is only the network path for SSH, so no web port is open on the tailnet or
+the home network. On the phone, use an SSH app with local port forwarding (for
+example Termux with the same `ssh -N -L` line) and open `http://127.0.0.1:5062`.
 
 The latest polls, including failed ones:
 

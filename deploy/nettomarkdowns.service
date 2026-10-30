@@ -8,7 +8,8 @@ User=lauge
 WorkingDirectory=/home/lauge/apps/nettomarkdowns/app
 ExecStart=/home/lauge/apps/nettomarkdowns/app/NettoMarkdowns
 EnvironmentFile=/home/lauge/apps/nettomarkdowns/nettomarkdowns.env
-Environment=ASPNETCORE_URLS=http://0.0.0.0:5062
+# No login, so localhost only. Reach it through an SSH tunnel, see deploy/README.md.
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5062
 Environment=MarkdownLog__Enabled=true
 Environment=MarkdownLog__DatabasePath=/home/lauge/apps/nettomarkdowns/data/markdowns.db
 Environment=Salling__ProductDatabasePath=/home/lauge/apps/nettomarkdowns/data/products.db
